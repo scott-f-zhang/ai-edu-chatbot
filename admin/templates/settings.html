@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block heading %}Global Settings{% endblock %}
+
+{% block content %}
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i>Settings saved successfully.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="post" action="/admin/settings">
+<div class="row g-4">
+    <!-- LLM Settings -->
+    <div class="col-12 col-lg-6">
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-cpu me-2"></i>LLM Configuration
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-medium">Provider</label>
+                    <select name="provider" class="form-select">
+                        <option value="anthropic" {% if llm.provider == 'anthropic' %}selected{% endif %}>Anthropic (Claude)</option>
+                        <option value="openai" {% if llm.provider == 'openai' %}selected{% endif %}>OpenAI</option>
+                        <option value="ollama" {% if llm.provider == 'ollama' %}selected{% endif %}>Ollama (Local)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-medium">Model</label>
+                    <input type="text" name="model" class="form-control font-monospace"
+                           value="{{ llm.model }}" required placeholder="e.g. claude-sonnet-4-6">
+                    <small class="text-muted">
+                        Claude: claude-sonnet-4-6, claude-haiku-4-5-20251001 |
+                        OpenAI: gpt-4o, gpt-4o-mini |
+                        Ollama: llama3.2, mistral
+                    </small>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-medium">Temperature</label>
+                        <input type="number" name="temperature" class="form-control"
+                               value="{{ llm.temperature }}" min="0" max="2" step="0.1">
+                        <small class="text-muted">0 = deterministic, 2 = creative</small>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-medium">Max Tokens</label>
+                        <input type="number" name="max_tokens" class="form-control"
+                               value="{{ llm.max_tokens }}" min="256" max="32000" step="256">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RAG Settings -->
+    <div class="col-12 col-lg-6">
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-search me-2"></i>RAG Configuration
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-medium">Chunk Size</label>
+                        <input type="number" name="chunk_size" class="form-control"
+                               value="{{ rag.chunk_size }}" min="100" max="4000" step="100">
+                        <small class="text-muted">Characters per chunk</small>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-medium">Chunk Overlap</label>
+                        <input type="number" name="chunk_overlap" class="form-control"
+                               value="{{ rag.chunk_overlap }}" min="0" max="1000" step="50">
+                        <small class="text-muted">Overlap between chunks</small>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-medium">Retrieved Documents (k)</label>
+                    <input type="number" name="retrieval_k" class="form-control"
+                           value="{{ rag.retrieval_k }}" min="1" max="20">
+                    <small class="text-muted">Number of context chunks passed to the LLM</small>
+                </div>
+                <div class="alert alert-info small mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Chunk size changes apply to newly ingested files. Use "Rebuild Index" on each module to re-apply.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <button type="submit" class="btn btn-primary">
+        <i class="bi bi-save me-1"></i>Save Settings
+    </button>
+</div>
+</form>
+{% endblock %}

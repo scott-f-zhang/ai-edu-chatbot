@@ -1,0 +1,57 @@
+{
+  "restrictive_words": [
+    "prohibit",
+    "prohibited",
+    "ban",
+    "banned",
+    "violation",
+    "violations",
+    "discipline",
+    "disciplinary",
+    "misconduct",
+    "unauthorized",
+    "forbidden",
+    "must not",
+    "may not",
+    "not permitted",
+    "academic integrity",
+    "honor code",
+    "penalty",
+    "enforcement"
+  ],
+  "innovation_words": [
+    "innovation",
+    "innovative",
+    "experiment",
+    "experimentation",
+    "encourage",
+    "support",
+    "integrate",
+    "integration",
+    "explore",
+    "exploration",
+    "opportunity",
+    "responsible use",
+    "pedagogical",
+    "learning"
+  ],
+  "admin_risk_words": [
+    "data privacy",
+    "confidential information",
+    "information security",
+    "cybersecurity",
+    "vendor",
+    "licensing",
+    "procurement",
+    "legal compliance",
+    "risk management"
+  ],
+  "faculty_words": [
+    "faculty discretion",
+    "instructor discretion",
+    "academic freedom",
+    "departmental guidance",
+    "course level",
+    "as determined by faculty"
+  ]
+}

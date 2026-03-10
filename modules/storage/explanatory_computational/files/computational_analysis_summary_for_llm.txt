@@ -1,0 +1,8 @@
+Computational analysis (typology) export summary
+================================================
+Output directory: /content/drive/MyDrive/Projects/ai-in-higher-education/data/processed/computational_analysis_data
+
+Policy typology: 3 categories.
+Categories: Administrative Risk-Management, Restrictive / Compliance-Driven, Innovation-Forward
+
+Exported files: governance_word_lists.json, df_with_typology_and_densities.csv, typology_distribution.csv, density_gap_summary.json

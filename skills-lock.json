@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "chainlit": {
+      "source": "salmanferozkhan/cloud-and-fast-api",
+      "sourceType": "github",
+      "computedHash": "3ecfef2b43022898a2422b33e2b81d8f51c262e441e21d62be14c2c01e542e4b"
+    }
+  }
+}

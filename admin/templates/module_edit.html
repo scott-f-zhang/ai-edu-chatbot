@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}{% if module %}Edit {{ module.name }}{% else %}New Module{% endif %}{% endblock %}
+{% block heading %}{% if module %}Edit Module{% else %}New Module{% endif %}{% endblock %}
+
+{% block content %}
+{% set is_new = module is none %}
+{% set action = "/admin/modules/new" if is_new else "/admin/modules/" ~ module.id %}
+
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i>Module saved successfully.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if request.query_params.get('uploaded') %}
+<div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i>File uploaded and indexed successfully.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row g-4">
+    <!-- Module config form -->
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header fw-semibold">Module Configuration</div>
+            <div class="card-body">
+                <form method="post" action="{{ action }}">
+                    {% if is_new %}
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Module ID <small class="text-muted">(lowercase, underscores, no spaces)</small></label>
+                        <input type="text" name="module_id" class="form-control font-monospace"
+                               pattern="[a-z0-9_]+" required placeholder="e.g. my_analysis">
+                    </div>
+                    {% endif %}
+
+                    <div class="row mb-3">
+                        <div class="col-2">
+                            <label class="form-label fw-medium">Icon</label>
+                            <input type="text" name="icon" class="form-control text-center fs-4"
+                                   value="{{ module.icon if module else '📚' }}" maxlength="4">
+                        </div>
+                        <div class="col-10">
+                            <label class="form-label fw-medium">Name</label>
+                            <input type="text" name="name" class="form-control"
+                                   value="{{ module.name if module else '' }}" required placeholder="Module display name">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Description</label>
+                        <textarea name="description" class="form-control" rows="2"
+                                  placeholder="Brief description shown to users">{{ module.description if module else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-medium">System Prompt</label>
+                        <small class="text-muted d-block mb-1">Instructions that define the AI's behavior for this module.</small>
+                        <textarea name="system_prompt" class="form-control system-prompt"
+                                  required>{{ module.system_prompt if module else '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i>{% if is_new %}Create Module{% else %}Save Changes{% endif %}
+                        </button>
+                        <a href="/admin/" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Files panel (only for existing modules) -->
+    {% if not is_new %}
+    <div class="col-12 col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">Files</span>
+                <span class="badge bg-secondary">{{ files|length }}</span>
+            </div>
+            <div class="card-body">
+                {% if files %}
+                <ul class="list-group list-group-flush mb-3">
+                    {% for filename in files %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div>
+                            {% if filename.endswith('.pdf') %}<i class="bi bi-file-pdf text-danger me-2"></i>
+                            {% elif filename.endswith('.csv') %}<i class="bi bi-filetype-csv text-success me-2"></i>
+                            {% elif filename.endswith('.xlsx') or filename.endswith('.xls') %}<i class="bi bi-file-spreadsheet text-success me-2"></i>
+                            {% elif filename.endswith('.png') or filename.endswith('.jpg') or filename.endswith('.jpeg') %}<i class="bi bi-image text-primary me-2"></i>
+                            {% else %}<i class="bi bi-file-text me-2"></i>{% endif %}
+                            <small>{{ filename }}</small>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <!-- Move to another module -->
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                    data-bs-target="#moveModal{{ loop.index }}" title="Move to another module">
+                                <i class="bi bi-arrow-right"></i>
+                            </button>
+                            <!-- Delete file -->
+                            <form action="/admin/modules/{{ module.id }}/files/{{ filename }}/delete" method="post">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                        onclick="return confirm('Delete {{ filename }}?')" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </li>
+
+                    <!-- Move modal -->
+                    <div class="modal fade" id="moveModal{{ loop.index }}" tabindex="-1">
+                        <div class="modal-dialog modal-sm">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h6 class="modal-title">Move {{ filename }}</h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form action="/admin/modules/{{ module.id }}/files/{{ filename }}/move" method="post">
+                                    <div class="modal-body">
+                                        <label class="form-label">Target module ID</label>
+                                        <input type="text" name="target_module_id" class="form-control font-monospace"
+                                               placeholder="module_id" required>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="submit" class="btn btn-primary btn-sm">Move</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted small mb-3">No files uploaded yet.</p>
+                {% endif %}
+
+                <!-- Upload form -->
+                <form action="/admin/modules/{{ module.id }}/files" method="post" enctype="multipart/form-data">
+                    <div class="input-group">
+                        <input type="file" name="file" class="form-control form-control-sm" required
+                               accept=".pdf,.csv,.xlsx,.xls,.txt,.md,.png,.jpg,.jpeg">
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="bi bi-upload me-1"></i>Upload
+                        </button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">PDF, CSV, Excel, text, or images</small>
+                </form>
+            </div>
+        </div>
+
+        <!-- Rebuild index -->
+        <div class="card">
+            <div class="card-body">
+                <h6 class="fw-semibold">Vector Index</h6>
+                <p class="text-muted small">Re-index all files if responses seem outdated or files were added externally.</p>
+                <form action="/admin/modules/{{ module.id }}/rebuild" method="post">
+                    <button type="submit" class="btn btn-sm btn-outline-warning"
+                            onclick="return confirm('Rebuild index for {{ module.name }}? This may take a moment.')">
+                        <i class="bi bi-arrow-repeat me-1"></i>Rebuild Index
+                    </button>
+                </form>
+                {% if request.query_params.get('rebuilt') %}
+                <small class="text-success d-block mt-2">
+                    <i class="bi bi-check-circle me-1"></i>Rebuilt with {{ request.query_params.get('rebuilt') }} chunks.
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

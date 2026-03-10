@@ -1,0 +1,12 @@
+Topic modeling export summary
+===============================
+Output directory: /content/drive/MyDrive/Projects/ai-in-higher-education/data/processed/topic_modeling_data
+
+LDA: best_num_topics = 10, coherence = c_v.
+LDA topic columns: 10 (Topic_0 .. Topic_9).
+Topic × Rank: topic_by_rank_means.csv (High-rank vs Low-rank means).
+Topic × State: topic_by_school_type_means.csv (Public / Private means).
+Topic × Policy typology: df_topics_typology.csv, topic_by_policy_typology_means.csv.
+BERTopic: 4 topic rows in bertopic_topic_info.csv.
+
+Exported files: lda_topic_terms.json, df_with_lda_topics.csv, topic_by_rank_means.csv, topic_by_school_type_means.csv, df_topics_typology.csv, topic_by_policy_typology_means.csv, bertopic_topic_info.csv, bertopic_topic_terms.json, df_with_bertopic.csv, dmr_topic_labels.json, df_stm_with_topics.csv

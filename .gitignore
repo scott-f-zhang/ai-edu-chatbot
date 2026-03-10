@@ -1,0 +1,15 @@
+__pycache__/
+.states
+.DS_Store
+.agents/
+.chainlit/
+.env
+.env.*
+!.env.example
+*.py[cod]
+.web
+assets/external/
+*.db
+data/chroma/
+notebooks
+notebooks/*
