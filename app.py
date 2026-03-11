@@ -1,4 +1,5 @@
 """Main Chainlit entry point for the AI in Higher Education chatbot."""
+import base64
 import json
 import threading
 from pathlib import Path
@@ -12,12 +13,21 @@ from config import get_config, get_llm_config, update_llm_config, get_rag_servic
 from modules.manager import ModuleManager
 from llm.providers import get_llm
 from visualization.charts import generate_chart, is_chart_request
-from visualization.preset_charts import generate_preset_chart, list_preset_charts, get_preset_chart_extra_info
+from visualization.preset_charts import (
+    export_all_preset_charts,
+    generate_preset_chart,
+    get_preset_chart_extra_info,
+    get_preset_chart_image_path,
+    list_preset_charts,
+)
 from visualization.fullscreen import save_plot_html
 from chat.history import get_history, append_history, clear_history
 
 # --- Start RAG service as daemon thread ---
 from rag_service.app import create_rag_app
+
+_preset_charts_exported = False
+
 
 def _start_rag_server():
     rag_app = create_rag_app()
@@ -111,7 +121,7 @@ async def _show_module_overview(module_id: str, heading: str | None = None):
             for chart in preset_charts
         ]
         await cl.Message(
-            content="**Notebook Charts**\n\nClick a title below to render a preset chart directly from the notebook logic:",
+            content="**Notebook Charts**\n\nClick a chart below to render.",
             actions=chart_actions,
         ).send()
 
@@ -120,24 +130,36 @@ async def _show_module_overview(module_id: str, heading: str | None = None):
 # RAG HTTP client
 # ---------------------------------------------------------------------------
 
-async def _rag_stream(module_id: str, question: str, system_prompt: str, history: list):
-    """Stream tokens from the RAG service via SSE."""
+async def _rag_stream(
+    module_id: str,
+    question: str,
+    system_prompt: str,
+    history: list,
+    chart_image_base64: str | None = None,
+):
+    """Stream tokens from the RAG service via SSE. Optionally include a chart image for vision context."""
     payload = {
         "question": question,
         "system_prompt": system_prompt,
         "history": history,
         **get_llm_config(),
     }
+    if chart_image_base64 is not None:
+        payload["chart_image_base64"] = chart_image_base64
     rag_url = get_rag_service_url()
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream("POST", f"{rag_url}/stream/{module_id}", json=payload) as resp:
             resp.raise_for_status()
+            done = False
             async for line in resp.aiter_lines():
+                if done:
+                    continue  # drain remainder of stream so connection closes in same task
                 if not line.startswith("data: "):
                     continue
                 data = line[6:]
                 if data == "[DONE]":
-                    break
+                    done = True
+                    continue
                 parsed = json.loads(data)
                 if isinstance(parsed, dict) and "error" in parsed:
                     raise RuntimeError(parsed["error"])
@@ -151,6 +173,14 @@ async def _rag_stream(module_id: str, question: str, system_prompt: str, history
 @cl.on_chat_start
 async def on_start():
     """Start directly in the default module instead of forcing module selection."""
+    global _preset_charts_exported
+    if not _preset_charts_exported:
+        try:
+            export_all_preset_charts()
+            _preset_charts_exported = True
+        except Exception:
+            pass  # Logged inside export_all_preset_charts; continue without preset images
+
     cl.user_session.set("history", [])
 
     module = module_manager.get_module(DEFAULT_MODULE_ID)
@@ -171,6 +201,8 @@ async def on_module_select(action: cl.Action):
     """Switch to the selected analysis module."""
     module_id = action.payload.get("module_id")
     cl.user_session.set("history", [])
+    cl.user_session.set("last_preset_chart_id", None)
+    cl.user_session.set("last_preset_chart_title", None)
     await _show_module_overview(module_id)
 
 
@@ -182,6 +214,13 @@ async def on_preset_chart_select(action: cl.Action):
     if not module_id or not chart_id:
         await cl.Message(content="❌ Missing preset chart information.").send()
         return
+
+    # Resolve chart title for later context when user asks about "this chart"
+    chart_title = None
+    for c in list_preset_charts(module_id):
+        if c["id"] == chart_id:
+            chart_title = c["title"]
+            break
 
     try:
         figure = generate_preset_chart(module_id, chart_id)
@@ -205,6 +244,10 @@ async def on_preset_chart_select(action: cl.Action):
     extra_info = get_preset_chart_extra_info(module_id, chart_id)
     if extra_info:
         await cl.Message(content=extra_info).send()
+
+    # Store which chart was just shown so follow-up questions ("tell me more about this chart") can use it
+    cl.user_session.set("last_preset_chart_id", chart_id)
+    cl.user_session.set("last_preset_chart_title", chart_title or chart_id)
 
 
 @cl.on_message
@@ -264,12 +307,33 @@ async def on_message(message: cl.Message):
             return
 
     # --- RAG streaming query ---
+    # If user just viewed a preset chart, add context and optionally the chart image for vision
+    system_prompt = module.system_prompt
+    last_chart_id = cl.user_session.get("last_preset_chart_id")
+    last_chart_title = cl.user_session.get("last_preset_chart_title")
+    chart_image_base64 = None
+    if last_chart_id and last_chart_title:
+        chart_context = (
+            f'\n\n[Current context: The user has just viewed the preset chart "{last_chart_title}". '
+            "When they refer to \"this chart\", \"the chart above\", or ask for more information about it, "
+            "answer with respect to that chart.]"
+        )
+        extra_info = get_preset_chart_extra_info(module_id, last_chart_id)
+        if extra_info:
+            # Provide the chart's description (e.g. topic mapping) so the assistant can elaborate
+            chart_context += f"\n\n[Description of that chart for reference:\n{extra_info[:2000]}{'...' if len(extra_info) > 2000 else ''}\n]"
+        system_prompt = system_prompt + chart_context
+        # Attach pre-exported chart image so the LLM can answer from the figure content (vision)
+        image_path = get_preset_chart_image_path(module_id, last_chart_id)
+        if image_path.exists():
+            chart_image_base64 = base64.b64encode(image_path.read_bytes()).decode("utf-8")
+
     response_msg = cl.Message(content="")
     await response_msg.send()
 
     full_response = ""
     try:
-        async for token in _rag_stream(module_id, text, module.system_prompt, history):
+        async for token in _rag_stream(module_id, text, system_prompt, history, chart_image_base64):
             full_response += token
             await response_msg.stream_token(token)
     except Exception as e:

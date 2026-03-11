@@ -1,6 +1,6 @@
 """RAGPipeline: file ingestion and conversational query with ChromaDB."""
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -106,9 +106,11 @@ class RAGPipeline:
         llm: BaseChatModel,
         system_prompt: str,
         history: List[Dict[str, str]],
+        chart_image_base64: Optional[str] = None,
     ):
         """
         Stream tokens from the LLM. Yields string tokens.
+        If chart_image_base64 is provided, the current user message is sent as multimodal (text + image) for vision.
         """
         rag_cfg = self.config.rag
 
@@ -135,7 +137,23 @@ class RAGPipeline:
                 messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
                 messages.append(AIMessage(content=msg["content"]))
-        messages.append(HumanMessage(content=question))
+
+        if chart_image_base64:
+            # Anthropic/LangChain multimodal: text block + image block (base64)
+            last_user_content = [
+                {"type": "text", "text": question},
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": chart_image_base64,
+                    },
+                },
+            ]
+            messages.append(HumanMessage(content=last_user_content))
+        else:
+            messages.append(HumanMessage(content=question))
 
         async for chunk in llm.astream(messages):
             if hasattr(chunk, "content") and chunk.content:

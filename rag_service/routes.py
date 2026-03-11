@@ -2,7 +2,7 @@
 import asyncio
 import json
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -27,6 +27,7 @@ class QueryRequest(BaseModel):
     model: str = "claude-sonnet-4-6"
     temperature: float = 0.7
     max_tokens: int = 4096
+    chart_image_base64: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +79,7 @@ async def stream_query(module_id: str, req: QueryRequest):
                 llm=llm,
                 system_prompt=req.system_prompt,
                 history=req.history,
+                chart_image_base64=req.chart_image_base64,
             ):
                 # JSON-encode token to safely handle newlines and special chars
                 yield f"data: {json.dumps(token)}\n\n"
