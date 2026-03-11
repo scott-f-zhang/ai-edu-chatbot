@@ -12,7 +12,8 @@ from config import get_config, get_llm_config, update_llm_config, get_rag_servic
 from modules.manager import ModuleManager
 from llm.providers import get_llm
 from visualization.charts import generate_chart, is_chart_request
-from visualization.preset_charts import generate_preset_chart, list_preset_charts
+from visualization.preset_charts import generate_preset_chart, list_preset_charts, get_preset_chart_extra_info
+from visualization.fullscreen import save_plot_html
 from chat.history import get_history, append_history, clear_history
 
 # --- Start RAG service as daemon thread ---
@@ -188,10 +189,22 @@ async def on_preset_chart_select(action: cl.Action):
         await cl.Message(content=f"❌ Preset chart generation failed: {e}").send()
         return
 
+    try:
+        plot_id = save_plot_html(figure)
+        fullscreen_url = f"{get_rag_service_url()}/plots/{plot_id}"
+        link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
+    except Exception:
+        plot_id = None
+        link_text = ""
+
     await cl.Message(
-        content="Here is the preset notebook chart:",
+        content="Here is the preset notebook chart:" + link_text,
         elements=[cl.Plotly(figure=figure, display="inline", size="large")],
     ).send()
+
+    extra_info = get_preset_chart_extra_info(module_id, chart_id)
+    if extra_info:
+        await cl.Message(content=extra_info).send()
 
 
 @cl.on_message
@@ -226,8 +239,20 @@ async def on_message(message: cl.Message):
                 llm = get_llm(**llm_cfg)
                 df = pd.read_csv(data_files[0]) if data_files[0].endswith(".csv") else pd.read_excel(data_files[0])
                 figure = await generate_chart(df, text, llm)
+
+                try:
+                    plot_id = save_plot_html(figure)
+                    fullscreen_url = f"{get_rag_service_url()}/plots/{plot_id}"
+                    link_text = f"\n\n[在新标签页全屏查看]({fullscreen_url})"
+                except Exception:
+                    plot_id = None
+                    link_text = ""
+
                 elements = [cl.Plotly(figure=figure, display="inline", size="large")]
-                await cl.Message(content="Here is the chart:", elements=elements).send()
+                await cl.Message(
+                    content="Here is the chart:" + link_text,
+                    elements=elements,
+                ).send()
             except Exception as e:
                 await cl.Message(content=f"❌ Chart generation failed: {e}").send()
             await thinking_msg.remove()

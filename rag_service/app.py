@@ -4,6 +4,7 @@ import logging
 from fastapi import FastAPI
 
 from rag_service.routes import router, ingest_new_modules
+from rag_service.plot_routes import router as plot_router
 
 logger = logging.getLogger("rag_service")
 
@@ -11,6 +12,7 @@ logger = logging.getLogger("rag_service")
 def create_rag_app() -> FastAPI:
     app = FastAPI(title="RAG Service", docs_url=None, redoc_url=None)
     app.include_router(router)
+    app.include_router(plot_router)
 
     @app.on_event("startup")
     async def on_startup():

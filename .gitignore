@@ -13,3 +13,4 @@ assets/external/
 data/chroma/
 notebooks
 notebooks/*
+plots/

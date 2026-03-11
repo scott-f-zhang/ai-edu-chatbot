@@ -27,6 +27,17 @@ def generate_preset_chart(module_id: str, chart_id: str) -> go.Figure:
     raise KeyError(f"Unknown preset chart: {module_id}/{chart_id}")
 
 
+def get_preset_chart_extra_info(module_id: str, chart_id: str) -> str:
+    """Return optional markdown to show below a preset chart. Charts may register an extra_info callable."""
+    for chart in PRESET_CHARTS.get(module_id, []):
+        if chart["id"] == chart_id:
+            extra_info_fn = chart.get("extra_info")
+            if extra_info_fn is not None:
+                return extra_info_fn()
+            return ""
+    return ""
+
+
 def _storage_file(*parts: str) -> Path:
     return STORAGE_ROOT.joinpath(*parts)
 
@@ -356,7 +367,6 @@ def _chart_topic_prevalence_by_rank_percentile() -> go.Figure:
         if high_name not in grouped.columns or low_name not in grouped.columns:
             continue
         grouped = grouped.loc[top_topics]
-        ticktext = _topic_ticktext(top_topics)
         valid_percentiles.append(percentile)
         frames.append(
             go.Frame(
@@ -367,51 +377,36 @@ def _chart_topic_prevalence_by_rank_percentile() -> go.Figure:
                 ],
                 layout=go.Layout(
                     title=f"Topic prevalence by rank percentile (split at top {percentile}%)",
-                    xaxis=dict(tickmode="array", tickvals=top_topics, ticktext=ticktext),
+                    xaxis=dict(tickmode="array", tickvals=top_topics, ticktext=top_topics),
                 ),
             )
         )
     first_frame = frames[0]
     initial_percentile = valid_percentiles[0]
+
     fig = go.Figure(
         data=first_frame.data,
         frames=frames,
         layout=go.Layout(
             title=f"Topic prevalence by rank percentile (split at top {initial_percentile}%)",
             barmode="group",
+            margin=dict(t=60, b=80),
             xaxis=dict(
                 title="Topics",
                 tickmode="array",
                 tickvals=top_topics,
-                ticktext=_topic_ticktext(top_topics),
+                ticktext=top_topics,
                 tickangle=-35,
             ),
             yaxis=dict(title="Average topic probability"),
-            updatemenus=[
-                dict(
-                    type="buttons",
-                    showactive=False,
-                    buttons=[
-                        dict(
-                            label="Play",
-                            method="animate",
-                            args=[
-                                None,
-                                {
-                                    "frame": {"duration": 0, "redraw": True},
-                                    "fromcurrent": True,
-                                    "transition": {"duration": 0},
-                                },
-                            ],
-                        )
-                    ],
-                )
-            ],
             sliders=[
                 dict(
                     active=0,
                     currentvalue={"prefix": "Top percentile: "},
-                    pad={"t": 50},
+                    pad=dict(t=30, b=10),
+                    x=0.5,
+                    xanchor="center",
+                    len=0.9,
                     steps=[
                         dict(
                             method="animate",
@@ -464,9 +459,25 @@ def _chart_topic_prevalence_by_university_rank_group() -> go.Figure:
         barmode="group",
         xaxis_title="Topics",
         yaxis_title="Average topic probability",
-        xaxis=dict(tickmode="array", tickvals=top_topics, ticktext=_topic_ticktext(top_topics), tickangle=-35),
+        xaxis=dict(tickmode="array", tickvals=top_topics, ticktext=top_topics, tickangle=-35),
     )
     return fig
+
+
+def _extra_info_topic_prevalence_by_university_rank_group() -> str:
+    """Extra info for university-rank chart: topic mapping for top topics."""
+    df = _load_csv("typology", "files", "topic_by_rank_means.csv").rename(
+        columns={"Unnamed: 0": "topic"}
+    )
+    top_topics = (
+        df.assign(abs_diff=df["diff_high_minus_low"].abs())
+        .sort_values("abs_diff", ascending=False)
+        .head(8)["topic"]
+        .tolist()
+    )
+    topic_labels = _topic_ticktext(top_topics)
+    lines = ["**Topic mapping:**"] + [f"- {label}" for label in topic_labels]
+    return "\n\n" + "\n".join(lines)
 
 
 def _chart_topic_prevalence_by_institution_type() -> go.Figure:
@@ -487,10 +498,24 @@ def _chart_topic_prevalence_by_institution_type() -> go.Figure:
         barmode="group",
         xaxis_title="Topic",
         yaxis_title="Average topic probability",
-        xaxis=dict(tickmode="array", tickvals=top_topics, ticktext=_topic_ticktext(top_topics), tickangle=-35),
+        xaxis=dict(tickmode="array", tickvals=top_topics, ticktext=top_topics, tickangle=-35),
         legend_title="Institution type",
     )
     return fig
+
+
+def _extra_info_topic_prevalence_by_institution_type() -> str:
+    """Extra info for institution-type chart: topic mapping for top topics."""
+    df = _typology_school_type_means_df()
+    top_topics = (
+        df.assign(abs_diff=df["diff_public_minus_private"].abs())
+        .sort_values("abs_diff", ascending=False)
+        .head(8)["topic"]
+        .tolist()
+    )
+    topic_labels = _topic_ticktext(top_topics)
+    lines = ["**Topic mapping:**"] + [f"- {label}" for label in topic_labels]
+    return "\n\n" + "\n".join(lines)
 
 
 def _chart_average_topic_prevalence_by_policy_typology() -> go.Figure:
@@ -510,17 +535,26 @@ def _chart_average_topic_prevalence_by_policy_typology() -> go.Figure:
         barmode="group",
         xaxis_title="Topics",
         yaxis_title="Average topic probability",
-        xaxis=dict(tickmode="array", tickvals=topic_cols, ticktext=_topic_ticktext(topic_cols), tickangle=-35),
+        xaxis=dict(tickmode="array", tickvals=topic_cols, ticktext=topic_cols, tickangle=-35),
         legend_title="Policy typology",
     )
     return fig
+
+
+def _extra_info_average_topic_prevalence_by_policy_typology() -> str:
+    """Extra info for average-by-typology chart: mapping for all topics."""
+    df = _typology_policy_means_df()
+    topic_cols = [col for col in df.columns if col.startswith("Topic_")]
+    topic_labels = _topic_ticktext(topic_cols)
+    lines = ["**Topic mapping:**"] + [f"- {label}" for label in topic_labels]
+    return "\n\n" + "\n".join(lines)
 
 
 def _chart_topic_prevalence_mean_by_policy_typology() -> go.Figure:
     df = _typology_policy_means_df()
     topic_cols = [col for col in df.columns if col.startswith("Topic_")]
     z_values = df[topic_cols].values
-    ticktext = _topic_ticktext(topic_cols)
+    ticktext = _topic_ticktext(topic_cols)  # full labels for hover only
     customdata = np.tile(np.array(ticktext), (len(df), 1))
     fig = go.Figure(
         data=[
@@ -543,8 +577,47 @@ def _chart_topic_prevalence_mean_by_policy_typology() -> go.Figure:
         xaxis_title="Topics",
         yaxis_title="Policy typology",
     )
-    fig.update_xaxes(tickmode="array", tickvals=topic_cols, ticktext=ticktext, tickangle=-35)
+    fig.update_xaxes(tickmode="array", tickvals=topic_cols, ticktext=topic_cols, tickangle=-35)
     return fig
+
+
+def _extra_info_topic_prevalence_by_rank_percentile() -> str:
+    """Extra info for rank-percentile chart: topic mapping as markdown."""
+    df = _typology_rank_df()
+    topic_cols = [col for col in df.columns if col.startswith("Topic_")]
+    df_rank = df.dropna(subset=["rank"]).copy()
+    median_thr = df_rank["rank"].quantile(0.5)
+    df_rank["base_group"] = np.where(
+        df_rank["rank"] <= median_thr,
+        "High (<= median)",
+        "Low (> median)",
+    )
+    base_means = df_rank.groupby("base_group")[topic_cols].mean().T
+    base_means["diff_high_minus_low"] = (
+        base_means["High (<= median)"] - base_means["Low (> median)"]
+    )
+    top_topics = (
+        base_means.sort_values(
+            "diff_high_minus_low",
+            key=lambda series: series.abs(),
+            ascending=False,
+        )
+        .head(6)
+        .index
+        .tolist()
+    )
+    topic_labels = _topic_ticktext(top_topics)
+    lines = ["**Topic mapping:**"] + [f"- {label}" for label in topic_labels]
+    return "\n\n" + "\n".join(lines)
+
+
+def _extra_info_topic_prevalence_mean_by_policy_typology() -> str:
+    """Extra info for heatmap chart: mapping for all topics."""
+    df = _typology_policy_means_df()
+    topic_cols = [col for col in df.columns if col.startswith("Topic_")]
+    topic_labels = _topic_ticktext(topic_cols)
+    lines = ["**Topic mapping:**"] + [f"- {label}" for label in topic_labels]
+    return "\n\n" + "\n".join(lines)
 
 
 PRESET_CHARTS = {
@@ -561,10 +634,10 @@ PRESET_CHARTS = {
         {"id": "governance_map_by_typology", "title": "Governance Map by Typology", "builder": _chart_governance_map_by_typology},
     ],
     "typology": [
-        {"id": "topic_prevalence_by_rank_percentile", "title": "Topic prevalence by rank percentile", "builder": _chart_topic_prevalence_by_rank_percentile},
-        {"id": "topic_prevalence_by_university_rank_group", "title": "Topic prevalence by university rank group", "builder": _chart_topic_prevalence_by_university_rank_group},
-        {"id": "topic_prevalence_by_institution_type", "title": "Topic prevalence by institution type (State vs Non-state)", "builder": _chart_topic_prevalence_by_institution_type},
-        {"id": "average_topic_prevalence_by_policy_typology", "title": "Average topic prevalence by policy typology", "builder": _chart_average_topic_prevalence_by_policy_typology},
-        {"id": "topic_prevalence_mean_by_policy_typology", "title": "Topic prevalence (mean) by policy typology", "builder": _chart_topic_prevalence_mean_by_policy_typology},
+        {"id": "topic_prevalence_by_rank_percentile", "title": "Topic prevalence by rank percentile", "builder": _chart_topic_prevalence_by_rank_percentile, "extra_info": _extra_info_topic_prevalence_by_rank_percentile},
+        {"id": "topic_prevalence_by_university_rank_group", "title": "Topic prevalence by university rank group", "builder": _chart_topic_prevalence_by_university_rank_group, "extra_info": _extra_info_topic_prevalence_by_university_rank_group},
+        {"id": "topic_prevalence_by_institution_type", "title": "Topic prevalence by institution type (State vs Non-state)", "builder": _chart_topic_prevalence_by_institution_type, "extra_info": _extra_info_topic_prevalence_by_institution_type},
+        {"id": "average_topic_prevalence_by_policy_typology", "title": "Average topic prevalence by policy typology", "builder": _chart_average_topic_prevalence_by_policy_typology, "extra_info": _extra_info_average_topic_prevalence_by_policy_typology},
+        {"id": "topic_prevalence_mean_by_policy_typology", "title": "Topic prevalence (mean) by policy typology", "builder": _chart_topic_prevalence_mean_by_policy_typology, "extra_info": _extra_info_topic_prevalence_mean_by_policy_typology},
     ],
 }
