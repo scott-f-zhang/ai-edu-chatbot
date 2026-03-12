@@ -2,6 +2,18 @@
 
 A Chainlit-based chatbot for analyzing higher education AI policy materials with module-specific RAG workflows, notebook-backed preset charts, and a default general-purpose policy corpus.
 
+<table>
+  <tr>
+    <td><img src="https://cleanshot.com/share/tvr0QRps+" alt="Demo 1" width="100%" /></td>
+    <td><img src="https://cleanshot.com/share/cXtPKv5j+" alt="Demo 2" width="100%" /></td>
+  </tr>
+  <tr>
+    <td><img src="https://cleanshot.com/share/QhvFZfjT+" alt="Demo 3" width="100%" /></td>
+    <td><img src="https://cleanshot.com/share/vSdDrPgs+" alt="Demo 4" width="100%" /></td>
+  </tr>
+</table>
+
+
 ## Features
 
 - Default chat experience on app start without forcing module selection

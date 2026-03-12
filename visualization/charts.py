@@ -7,11 +7,19 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from visualization.plotly_utils import apply_default_figure_layout
 
-CHART_KEYWORDS = {
-    "chart", "graph", "plot", "visualize", "visualization", "diagram",
-    "bar", "line", "scatter", "pie", "heatmap", "histogram",
-    "trend", "draw",
-}
+# Only treat as chart generation when the message *starts with* one of these prefixes.
+# This avoids triggering on phrases like "tell me more about this graph" (RAG/vision).
+CHART_COMMAND_PREFIXES = (
+    "draw ",
+    "plot ",
+    "graph ",
+    "visualize ",
+    "create a chart",
+    "generate a chart",
+    "show me a chart",
+    "make a chart",
+    "chart the ",
+)
 
 CHART_SYSTEM_PROMPT = """You are a data visualization expert. Given a pandas DataFrame schema and a user request,
 generate Python code using Plotly to create the requested chart.
@@ -31,9 +39,10 @@ Return ONLY the Python code block, no explanations."""
 
 
 def is_chart_request(text: str) -> bool:
-    """Detect if the user message is requesting a chart/visualization."""
-    text_lower = text.lower()
-    return any(keyword in text_lower for keyword in CHART_KEYWORDS)
+    """True only if the message starts with an explicit chart-generation command.
+    Phrases like 'tell me more about this graph' are handled by RAG (with chart image context)."""
+    t = text.strip().lower()
+    return any(t.startswith(prefix) for prefix in CHART_COMMAND_PREFIXES)
 
 
 async def generate_chart(df: pd.DataFrame, user_request: str, llm: BaseChatModel = None) -> go.Figure:
