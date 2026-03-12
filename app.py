@@ -286,7 +286,7 @@ async def on_message(message: cl.Message):
                 try:
                     plot_id = save_plot_html(figure)
                     fullscreen_url = f"{get_rag_service_url()}/plots/{plot_id}"
-                    link_text = f"\n\n[在新标签页全屏查看]({fullscreen_url})"
+                    link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
                 except Exception:
                     plot_id = None
                     link_text = ""
