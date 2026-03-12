@@ -22,6 +22,7 @@ A Chainlit-based chatbot for analyzing higher education AI policy materials with
   - Explanatory Computational Analysis
   - Typology Analysis
   - Thematic Analysis
+  - EDA (exploratory data analysis: corpus overview, document length, term frequency, readability, geography)
 - Notebook-backed preset Plotly charts that bypass LLM chart generation
 - LLM-generated charts from module CSV or Excel files
 - Separate RAG service with streamed responses
@@ -31,11 +32,7 @@ A Chainlit-based chatbot for analyzing higher education AI policy materials with
 
 The app starts in a `default` module so users can begin chatting immediately.
 
-The default module corpus is built from:
-
-`/Users/scott/repos/ai-in-higher-education/data/processed/clean_df.csv`
-
-It groups rows by `university`, concatenates each university's `text`, and stores the combined output in:
+The default module corpus is built from a processed corpus CSV (e.g. `data/processed/clean_df.csv`). It groups rows by `university`, concatenates each university's `text`, and stores the combined output in:
 
 `modules/storage/default/files/default_module_corpus.txt`
 
@@ -45,6 +42,7 @@ It groups rows by `university`, concatenates each university's `text`, and store
 - `explanatory_computational`: Computational and typology-oriented analysis
 - `typology`: Topic-modeling and typology comparisons
 - `thematic`: Sentiment and thematic analysis assets
+- `eda`: Exploratory data analysis (corpus overview, document length, term frequency, bigrams, KWIC, lexical diversity, readability, policies by state)
 
 ## Running Locally
 
@@ -75,7 +73,3 @@ chainlit run app.py -w
 - `/config`: View or update LLM configuration
 - `/clear`: Clear conversation history
 - `/help`: Show available commands
-
-## Deployment Notes
-
-For short-lived demos, Railway is a good fit for this project. If you deploy it, remember to set the required environment variables and rebuild the default module index after the first launch if needed.
