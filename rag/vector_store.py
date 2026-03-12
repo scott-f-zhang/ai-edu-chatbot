@@ -23,6 +23,8 @@ def _get_embeddings(model_name: str = "all-MiniLM-L6-v2"):
 
 
 def _get_chroma_path() -> str:
+    if env_path := os.getenv("CHROMA_PATH"):
+        return env_path
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "chroma")
 
 

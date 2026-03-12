@@ -27,7 +27,7 @@ class AppConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     rag: RAGConfig = field(default_factory=RAGConfig)
     storage_path: str = field(default_factory=lambda: os.path.join(os.path.dirname(__file__), "modules", "storage"))
-    chroma_path: str = field(default_factory=lambda: os.path.join(os.path.dirname(__file__), "data", "chroma"))
+    chroma_path: str = field(default_factory=lambda: os.getenv("CHROMA_PATH") or os.path.join(os.path.dirname(__file__), "data", "chroma"))
     rag_service_port: int = field(default_factory=lambda: int(os.getenv("RAG_SERVICE_PORT", "8001")))
 
 
