@@ -9,7 +9,7 @@ import pandas as pd
 import chainlit as cl
 import uvicorn
 
-from config import get_config, get_llm_config, update_llm_config, get_rag_service_url
+from config import get_config, get_llm_config, update_llm_config, get_rag_service_url, get_public_base_url
 from modules.manager import ModuleManager
 from llm.providers import get_llm
 from visualization.charts import generate_chart, is_chart_request
@@ -25,6 +25,7 @@ from chat.history import get_history, append_history, clear_history
 
 # --- Start RAG service as daemon thread ---
 from rag_service.app import create_rag_app
+from rag_service.plot_routes import router as plot_router
 
 _preset_charts_exported = False
 
@@ -35,6 +36,11 @@ def _start_rag_server():
     uvicorn.run(rag_app, host="0.0.0.0", port=port, log_level="warning")
 
 threading.Thread(target=_start_rag_server, daemon=True).start()
+
+# Mount plot routes on Chainlit's public FastAPI app so fullscreen links work
+# in production where the internal RAG service port is not publicly accessible.
+from chainlit.server import app as _chainlit_app
+_chainlit_app.include_router(plot_router)
 
 # --- Globals ---
 module_manager = ModuleManager()
@@ -230,7 +236,7 @@ async def on_preset_chart_select(action: cl.Action):
 
     try:
         plot_id = save_plot_html(figure)
-        fullscreen_url = f"{get_rag_service_url()}/plots/{plot_id}"
+        fullscreen_url = f"{get_public_base_url()}/plots/{plot_id}"
         link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
     except Exception:
         plot_id = None
@@ -285,7 +291,7 @@ async def on_message(message: cl.Message):
 
                 try:
                     plot_id = save_plot_html(figure)
-                    fullscreen_url = f"{get_rag_service_url()}/plots/{plot_id}"
+                    fullscreen_url = f"{get_public_base_url()}/plots/{plot_id}"
                     link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
                 except Exception:
                     plot_id = None

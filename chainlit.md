@@ -1,5 +1,7 @@
 # AI in Higher Education 🎓
 
+<small>Made with ❤️ by Fan Zhang</small>
+
 Welcome! This assistant helps you explore and analyze educational research through specialized analysis modules.
 
 ## Analysis Modules

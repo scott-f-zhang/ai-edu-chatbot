@@ -39,6 +39,15 @@ def get_rag_service_url() -> str:
     return f"http://localhost:{get_config().rag_service_port}"
 
 
+def get_public_base_url() -> str:
+    """Return the publicly accessible base URL for browser-facing links.
+
+    Set PUBLIC_BASE_URL in production (e.g. https://myapp.up.railway.app).
+    Falls back to the internal RAG service URL for local development.
+    """
+    return os.getenv("PUBLIC_BASE_URL", "").rstrip("/") or get_rag_service_url()
+
+
 def get_config() -> AppConfig:
     global _config
     if _config is None:
