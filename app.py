@@ -12,7 +12,7 @@ import uvicorn
 from config import get_config, get_llm_config, update_llm_config, get_rag_service_url, get_public_base_url
 from modules.manager import ModuleManager
 from llm.providers import get_llm
-from visualization.charts import generate_chart, is_chart_request
+from visualization.charts import generate_chart, is_chart_request, review_chart_request
 from visualization.preset_charts import (
     export_all_preset_charts,
     generate_preset_chart,
@@ -28,6 +28,7 @@ from rag_service.app import create_rag_app
 from rag_service.plot_routes import router as plot_router
 
 _preset_charts_exported = False
+_CANCEL_PENDING_CHART_INPUTS = {"cancel", "never mind", "nevermind", "算了", "不用了", "取消"}
 
 
 def _start_rag_server():
@@ -100,6 +101,7 @@ async def _show_module_overview(module_id: str, heading: str | None = None):
         return
 
     cl.user_session.set("module_id", module_id)
+    cl.user_session.set("pending_chart_request", None)
 
     images = module_manager.get_images(module_id)
     elements = [
@@ -220,6 +222,7 @@ async def on_start():
             pass  # Logged inside export_all_preset_charts; continue without preset images
 
     cl.user_session.set("history", [])
+    cl.user_session.set("pending_chart_request", None)
 
     module = module_manager.get_module(DEFAULT_MODULE_ID)
     if not module:
@@ -239,6 +242,7 @@ async def on_module_select(action: cl.Action):
     """Switch to the selected analysis module."""
     module_id = action.payload.get("module_id")
     cl.user_session.set("history", [])
+    cl.user_session.set("pending_chart_request", None)
     cl.user_session.set("last_preset_chart_id", None)
     cl.user_session.set("last_preset_chart_title", None)
     await _show_module_overview(module_id)
@@ -308,41 +312,24 @@ async def on_message(message: cl.Message):
         return
 
     history = get_history()
+    pending_chart = cl.user_session.get("pending_chart_request")
+
+    if pending_chart and text.strip().lower() in _CANCEL_PENDING_CHART_INPUTS:
+        cl.user_session.set("pending_chart_request", None)
+        await cl.Message(content="已取消这次画图请求。").send()
+        return
+
+    if pending_chart and pending_chart.get("module_id") == module_id and not is_chart_request(text):
+        combined_request = (
+            f"{pending_chart['request']}\n\nAdditional clarification from the user:\n{text}"
+        )
+        await _handle_chart_request(module_id, combined_request, pending_request_text=pending_chart["request"])
+        return
 
     # --- Chart request ---
     if is_chart_request(text):
-        data_files = module_manager.get_data_files(module_id)
-        if data_files:
-            thinking_msg = cl.Message(content="📊 Generating chart...")
-            await thinking_msg.send()
-            try:
-                llm_cfg = get_llm_config()
-                llm = get_llm(**llm_cfg)
-                df = pd.read_csv(data_files[0]) if data_files[0].endswith(".csv") else pd.read_excel(data_files[0])
-                figure = await generate_chart(df, text, llm)
-
-                try:
-                    plot_id = save_plot_html(figure)
-                    fullscreen_url = f"{get_public_base_url()}/fullscreen-plots/{plot_id}"
-                    link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
-                except Exception:
-                    plot_id = None
-                    link_text = ""
-
-                elements = [cl.Plotly(figure=figure, display="inline", size="large")]
-                await cl.Message(
-                    content="Here is the chart:" + link_text,
-                    elements=elements,
-                ).send()
-            except Exception as e:
-                await cl.Message(content=f"❌ Chart generation failed: {e}").send()
-            await thinking_msg.remove()
-            return
-        else:
-            await cl.Message(
-                content=f"⚠️ No data files (CSV/Excel) found in this module. Drop a file into `modules/storage/{module_id}/files/` and restart."
-            ).send()
-            return
+        await _handle_chart_request(module_id, text)
+        return
 
     # --- RAG streaming query ---
     # If user just viewed a preset chart, add context and optionally the chart image for vision
@@ -382,6 +369,64 @@ async def on_message(message: cl.Message):
     await response_msg.update()
     append_history("user", text)
     append_history("assistant", full_response)
+
+
+async def _handle_chart_request(
+    module_id: str,
+    request_text: str,
+    pending_request_text: str | None = None,
+):
+    """Review chart requirements first, then either ask follow-up questions or render the chart."""
+    data_files = module_manager.get_data_files(module_id)
+    if not data_files:
+        await cl.Message(
+            content=f"⚠️ No data files (CSV/Excel) found in this module. Drop a file into `modules/storage/{module_id}/files/` and restart."
+        ).send()
+        return
+
+    llm_cfg = get_llm_config()
+    llm = get_llm(**llm_cfg)
+    data_path = data_files[0]
+    df = pd.read_csv(data_path) if data_path.endswith(".csv") else pd.read_excel(data_path)
+
+    review = await review_chart_request(df, request_text, llm)
+    if not review["is_ready"]:
+        cl.user_session.set(
+            "pending_chart_request",
+            {
+                "module_id": module_id,
+                "request": pending_request_text or request_text,
+            },
+        )
+        await cl.Message(
+            content=(
+                review["follow_up_question"]
+                + "\n\n回复补充信息后我再生成图；如果不想继续，回复 `cancel`。"
+            )
+        ).send()
+        return
+
+    cl.user_session.set("pending_chart_request", None)
+    thinking_msg = cl.Message(content="📊 Generating chart...")
+    await thinking_msg.send()
+    try:
+        figure = await generate_chart(df, review["normalized_request"], llm)
+
+        try:
+            plot_id = save_plot_html(figure)
+            fullscreen_url = f"{get_public_base_url()}/fullscreen-plots/{plot_id}"
+            link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
+        except Exception:
+            link_text = ""
+
+        elements = [cl.Plotly(figure=figure, display="inline", size="large")]
+        await cl.Message(
+            content="Here is the chart:" + link_text,
+            elements=elements,
+        ).send()
+    except Exception as e:
+        await cl.Message(content=f"❌ Chart generation failed: {e}").send()
+    await thinking_msg.remove()
 
 
 # ---------------------------------------------------------------------------
