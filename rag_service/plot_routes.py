@@ -10,11 +10,19 @@ PLOTS_DIR = Path(__file__).resolve().parents[1] / "plots"
 router = APIRouter()
 
 
-@router.get("/plots/{plot_id}", response_class=HTMLResponse)
-async def get_plot(plot_id: str):
+async def _get_plot_html(plot_id: str):
     """Return a standalone Plotly HTML file for the given plot_id."""
     html_path = PLOTS_DIR / f"{plot_id}.html"
     if not html_path.exists():
         raise HTTPException(status_code=404, detail="Plot not found")
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
+
+@router.get("/plots/{plot_id}", response_class=HTMLResponse)
+async def get_plot(plot_id: str):
+    return await _get_plot_html(plot_id)
+
+
+@router.get("/public/plots/{plot_id}", response_class=HTMLResponse)
+async def get_public_plot(plot_id: str):
+    return await _get_plot_html(plot_id)

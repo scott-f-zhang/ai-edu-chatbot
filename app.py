@@ -40,7 +40,39 @@ threading.Thread(target=_start_rag_server, daemon=True).start()
 # Mount plot routes on Chainlit's public FastAPI app so fullscreen links work
 # in production where the internal RAG service port is not publicly accessible.
 from chainlit.server import app as _chainlit_app
-_chainlit_app.include_router(plot_router)
+
+
+def _prioritize_public_plot_routes():
+    """Mount fullscreen plot routes ahead of Chainlit's SPA fallback routes."""
+    existing_route_ids = {id(route) for route in _chainlit_app.router.routes}
+    _chainlit_app.include_router(plot_router)
+
+    new_routes = [
+        route for route in _chainlit_app.router.routes
+        if id(route) not in existing_route_ids
+    ]
+    if not new_routes:
+        return
+
+    new_route_ids = {id(route) for route in new_routes}
+    non_plot_routes = [
+        route for route in _chainlit_app.router.routes
+        if id(route) not in new_route_ids
+    ]
+
+    catch_all_routes = []
+    regular_routes = []
+    for route in non_plot_routes:
+        path = getattr(route, "path", "")
+        if "{path:path}" in path or "{full_path:path}" in path:
+            catch_all_routes.append(route)
+        else:
+            regular_routes.append(route)
+
+    _chainlit_app.router.routes = regular_routes + new_routes + catch_all_routes
+
+
+_prioritize_public_plot_routes()
 
 # --- Globals ---
 module_manager = ModuleManager()
@@ -236,7 +268,7 @@ async def on_preset_chart_select(action: cl.Action):
 
     try:
         plot_id = save_plot_html(figure)
-        fullscreen_url = f"{get_public_base_url()}/plots/{plot_id}"
+        fullscreen_url = f"{get_public_base_url()}/public/plots/{plot_id}"
         link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
     except Exception:
         plot_id = None
@@ -291,7 +323,7 @@ async def on_message(message: cl.Message):
 
                 try:
                     plot_id = save_plot_html(figure)
-                    fullscreen_url = f"{get_public_base_url()}/plots/{plot_id}"
+                    fullscreen_url = f"{get_public_base_url()}/public/plots/{plot_id}"
                     link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
                 except Exception:
                     plot_id = None

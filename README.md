@@ -65,6 +65,9 @@ cp .env.example .env
 chainlit run app.py -w
 ```
 
+For production deployments, set `PUBLIC_BASE_URL` to the full external URL, including `https://`.
+Example: `https://ai-edu-chatbot-production.up.railway.app`
+
 ## Commands
 
 - `/switch`: Switch to another module
