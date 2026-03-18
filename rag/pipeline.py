@@ -1,12 +1,15 @@
 """RAGPipeline: file ingestion and conversational query with ChromaDB."""
+import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+import pandas as pd
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from modules.manager import ModuleManager
 from rag.loader import load_file
 from rag.chunking import chunk_documents
 import rag.vector_store as vector_store
@@ -18,6 +21,7 @@ logger = logging.getLogger("rag_pipeline")
 class RAGPipeline:
     def __init__(self):
         self.config = get_config()
+        self.module_manager = ModuleManager()
 
     def ingest_file(self, module_id: str, file_path: str) -> int:
         """
@@ -74,6 +78,64 @@ class RAGPipeline:
             )
             return []
 
+    def _build_explicit_file_context(self, module_id: str, question: str) -> list[str]:
+        """If the user mentions a known file directly, add a deterministic file summary to context."""
+        question_lower = question.lower()
+        context_blocks = []
+        for file_path in self.module_manager.get_file_paths(module_id):
+            path = Path(file_path)
+            if path.name.lower() not in question_lower:
+                continue
+            summary = self._summarize_file_for_context(path)
+            if summary:
+                context_blocks.append(summary)
+        return context_blocks
+
+    def _summarize_file_for_context(self, path: Path) -> str:
+        suffix = path.suffix.lower()
+        try:
+            if suffix == ".csv":
+                df = pd.read_csv(path)
+                return self._summarize_dataframe(path.name, df)
+            if suffix in {".xlsx", ".xls"}:
+                df = pd.read_excel(path)
+                return self._summarize_dataframe(path.name, df)
+            if suffix == ".json":
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    keys = list(data.keys())
+                    preview = ", ".join(str(k) for k in keys[:20])
+                    return (
+                        f"[Explicit File Context - {path.name}]\n"
+                        f"JSON object with {len(keys)} top-level keys.\n"
+                        f"Top-level keys: {preview}"
+                    )
+                if isinstance(data, list):
+                    return (
+                        f"[Explicit File Context - {path.name}]\n"
+                        f"JSON array with {len(data)} items."
+                    )
+            if suffix in {".txt", ".md"}:
+                text = path.read_text(encoding="utf-8")[:2000]
+                return f"[Explicit File Context - {path.name}]\n{text}"
+        except Exception as e:
+            logger.warning("Failed to summarize file '%s' for context: %s", path, e)
+        return ""
+
+    def _summarize_dataframe(self, filename: str, df: pd.DataFrame) -> str:
+        lines = [
+            f"[Explicit File Context - {filename}]",
+            f"Shape: {df.shape[0]} rows x {df.shape[1]} columns",
+            "Columns:",
+        ]
+        for col in df.columns:
+            non_null = int(df[col].notna().sum())
+            sample = next((str(v) for v in df[col] if pd.notna(v)), "")
+            lines.append(
+                f"- {col} (dtype: {df[col].dtype}, non-null: {non_null}/{len(df)}, sample: {sample[:120]})"
+            )
+        return "\n".join(lines)
+
     async def query(
         self,
         module_id: str,
@@ -95,10 +157,16 @@ class RAGPipeline:
             for i, doc in enumerate(relevant_docs, 1):
                 source = Path(doc.metadata.get("source_file", "unknown")).name
                 context_parts.append(f"[Document {i} - {source}]\n{doc.page_content}")
-            context = "\n\n".join(context_parts)
+            explicit_context = self._build_explicit_file_context(module_id, question)
+            context = "\n\n".join(explicit_context + context_parts)
             full_system = f"{system_prompt}\n\n--- Relevant Context ---\n{context}\n--- End Context ---"
         else:
-            full_system = system_prompt
+            explicit_context = self._build_explicit_file_context(module_id, question)
+            if explicit_context:
+                context = "\n\n".join(explicit_context)
+                full_system = f"{system_prompt}\n\n--- Relevant Context ---\n{context}\n--- End Context ---"
+            else:
+                full_system = system_prompt
 
         # Build message history
         messages = [SystemMessage(content=full_system)]
@@ -133,10 +201,16 @@ class RAGPipeline:
             for i, doc in enumerate(relevant_docs, 1):
                 source = Path(doc.metadata.get("source_file", "unknown")).name
                 context_parts.append(f"[Document {i} - {source}]\n{doc.page_content}")
-            context = "\n\n".join(context_parts)
+            explicit_context = self._build_explicit_file_context(module_id, question)
+            context = "\n\n".join(explicit_context + context_parts)
             full_system = f"{system_prompt}\n\n--- Relevant Context ---\n{context}\n--- End Context ---"
         else:
-            full_system = system_prompt
+            explicit_context = self._build_explicit_file_context(module_id, question)
+            if explicit_context:
+                context = "\n\n".join(explicit_context)
+                full_system = f"{system_prompt}\n\n--- Relevant Context ---\n{context}\n--- End Context ---"
+            else:
+                full_system = system_prompt
 
         messages = [SystemMessage(content=full_system)]
         for msg in history[-10:]:
