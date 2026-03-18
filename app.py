@@ -268,7 +268,7 @@ async def on_preset_chart_select(action: cl.Action):
 
     try:
         plot_id = save_plot_html(figure)
-        fullscreen_url = f"{get_public_base_url()}/public/plots/{plot_id}"
+        fullscreen_url = f"{get_public_base_url()}/fullscreen-plots/{plot_id}"
         link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
     except Exception:
         plot_id = None
@@ -323,7 +323,7 @@ async def on_message(message: cl.Message):
 
                 try:
                     plot_id = save_plot_html(figure)
-                    fullscreen_url = f"{get_public_base_url()}/public/plots/{plot_id}"
+                    fullscreen_url = f"{get_public_base_url()}/fullscreen-plots/{plot_id}"
                     link_text = f"\n\n[Open fullscreen in a new tab]({fullscreen_url})"
                 except Exception:
                     plot_id = None

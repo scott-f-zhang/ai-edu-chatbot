@@ -23,6 +23,6 @@ async def get_plot(plot_id: str):
     return await _get_plot_html(plot_id)
 
 
-@router.get("/public/plots/{plot_id}", response_class=HTMLResponse)
-async def get_public_plot(plot_id: str):
+@router.get("/fullscreen-plots/{plot_id}", response_class=HTMLResponse)
+async def get_fullscreen_plot(plot_id: str):
     return await _get_plot_html(plot_id)
