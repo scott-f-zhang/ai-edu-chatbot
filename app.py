@@ -401,7 +401,7 @@ async def _handle_chart_request(
         await cl.Message(
             content=(
                 review["follow_up_question"]
-                + "\n\nReply with the missing details and I will generate the chart. If you do not want to continue, reply `cancel`."
+                + "\n\nReply with the missing details and I will generate the chart. If you want the model to choose the chart details for you, reply `you decide`. If you do not want to continue, reply `cancel`."
             )
         ).send()
         return

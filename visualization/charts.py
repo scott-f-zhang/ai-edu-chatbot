@@ -51,13 +51,14 @@ Return ONLY valid JSON with this exact shape:
 }
 
 Rules:
-1. Set "is_ready" to true only when the chart can be generated without making a material assumption.
-2. If the request is unclear, set "is_ready" to false and ask a concise follow-up question in "follow_up_question".
-3. The follow-up question must ask only for the missing details that matter for this chart, such as chart type, x, y, grouping, aggregation, color, or filter.
-4. If the user asks for a distribution or count chart and the metric is clearly an implicit count, that is specific enough.
-5. If the user mentions columns that do not exist in the schema, ask them to pick from the available columns.
-6. Keep "normalized_request" empty when "is_ready" is false.
-7. Keep the follow-up short and practical. Do not explain your reasoning."""
+1. If the user explicitly says "you decide", "use your judgment", "pick the best chart", or similar, set "is_ready" to true and let the chart generator choose reasonable defaults.
+2. Otherwise, set "is_ready" to true only when the chart can be generated without making a material assumption.
+3. If the request is unclear, set "is_ready" to false and ask a concise follow-up question in "follow_up_question".
+4. The follow-up question must ask only for the missing details that matter for this chart, such as chart type, x, y, grouping, aggregation, color, or filter.
+5. If the user asks for a distribution or count chart and the metric is clearly an implicit count, that is specific enough.
+6. If the user mentions columns that do not exist in the schema, ask them to pick from the available columns.
+7. Keep "normalized_request" empty when "is_ready" is false.
+8. Keep the follow-up short and practical. Do not explain your reasoning."""
 
 
 def is_chart_request(text: str) -> bool:
@@ -73,6 +74,16 @@ async def review_chart_request(
     llm: BaseChatModel | None = None,
 ) -> dict:
     """Check whether a chart request is specific enough, else ask a targeted follow-up."""
+    if _user_delegates_chart_choices(user_request):
+        return {
+            "is_ready": True,
+            "normalized_request": (
+                user_request.strip()
+                + "\nThe user wants you to choose the chart type, x-axis, y-axis, grouping, color, and aggregation using reasonable defaults based on the dataset."
+            ),
+            "follow_up_question": "",
+        }
+
     chart_llm = _get_chart_llm(llm)
     schema = _describe_dataframe(df)
     prompt = f"""DataFrame schema:
@@ -173,6 +184,20 @@ def _parse_chart_review_response(text: str, original_request: str) -> dict:
             or "What kind of chart do you want? Please specify the x-axis, y-axis, and whether you want grouping, color, or filters."
         ),
     }
+
+
+def _user_delegates_chart_choices(text: str) -> bool:
+    lowered = text.lower()
+    phrases = (
+        "you decide",
+        "you choose",
+        "use your judgment",
+        "pick the best chart",
+        "choose the best chart",
+        "whatever makes sense",
+        "decide for me",
+    )
+    return any(phrase in lowered for phrase in phrases)
 
 
 def _strip_imports(code: str) -> str:
