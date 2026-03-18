@@ -1,4 +1,5 @@
 """RAGPipeline: file ingestion and conversational query with ChromaDB."""
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -10,6 +11,8 @@ from rag.loader import load_file
 from rag.chunking import chunk_documents
 import rag.vector_store as vector_store
 from config import get_config
+
+logger = logging.getLogger("rag_pipeline")
 
 
 class RAGPipeline:
@@ -53,6 +56,24 @@ class RAGPipeline:
             total += self.ingest_file(module_id, fp)
         return total
 
+    def _retrieve_relevant_docs(self, module_id: str, question: str):
+        """Best-effort retrieval that degrades gracefully if the local Chroma index is corrupted."""
+        rag_cfg = self.config.rag
+        try:
+            return vector_store.similarity_search(
+                module_id=module_id,
+                query=question,
+                k=rag_cfg.retrieval_k,
+                embedding_model=rag_cfg.embedding_model,
+            )
+        except Exception as e:
+            logger.warning(
+                "Retrieval failed for module '%s': %s. Proceeding without vector context; rebuild may be required.",
+                module_id,
+                e,
+            )
+            return []
+
     async def query(
         self,
         module_id: str,
@@ -65,15 +86,8 @@ class RAGPipeline:
         Retrieve relevant context and generate a response using the LLM.
         History format: [{"role": "user"|"assistant", "content": "..."}]
         """
-        rag_cfg = self.config.rag
-
         # Retrieve relevant documents
-        relevant_docs = vector_store.similarity_search(
-            module_id=module_id,
-            query=question,
-            k=rag_cfg.retrieval_k,
-            embedding_model=rag_cfg.embedding_model,
-        )
+        relevant_docs = self._retrieve_relevant_docs(module_id, question)
 
         # Build context string
         if relevant_docs:
@@ -112,14 +126,7 @@ class RAGPipeline:
         Stream tokens from the LLM. Yields string tokens.
         If chart_image_base64 is provided, the current user message is sent as multimodal (text + image) for vision.
         """
-        rag_cfg = self.config.rag
-
-        relevant_docs = vector_store.similarity_search(
-            module_id=module_id,
-            query=question,
-            k=rag_cfg.retrieval_k,
-            embedding_model=rag_cfg.embedding_model,
-        )
+        relevant_docs = self._retrieve_relevant_docs(module_id, question)
 
         if relevant_docs:
             context_parts = []
