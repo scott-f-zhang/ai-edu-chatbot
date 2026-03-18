@@ -28,7 +28,7 @@ from rag_service.app import create_rag_app
 from rag_service.plot_routes import router as plot_router
 
 _preset_charts_exported = False
-_CANCEL_PENDING_CHART_INPUTS = {"cancel", "never mind", "nevermind", "算了", "不用了", "取消"}
+_CANCEL_PENDING_CHART_INPUTS = {"cancel", "never mind", "nevermind"}
 
 
 def _start_rag_server():
@@ -316,7 +316,7 @@ async def on_message(message: cl.Message):
 
     if pending_chart and text.strip().lower() in _CANCEL_PENDING_CHART_INPUTS:
         cl.user_session.set("pending_chart_request", None)
-        await cl.Message(content="已取消这次画图请求。").send()
+        await cl.Message(content="This chart request has been canceled.").send()
         return
 
     if pending_chart and pending_chart.get("module_id") == module_id and not is_chart_request(text):
@@ -401,7 +401,7 @@ async def _handle_chart_request(
         await cl.Message(
             content=(
                 review["follow_up_question"]
-                + "\n\n回复补充信息后我再生成图；如果不想继续，回复 `cancel`。"
+                + "\n\nReply with the missing details and I will generate the chart. If you do not want to continue, reply `cancel`."
             )
         ).send()
         return

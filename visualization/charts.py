@@ -170,7 +170,7 @@ def _parse_chart_review_response(text: str, original_request: str) -> dict:
         "normalized_request": "",
         "follow_up_question": (
             follow_up_question
-            or "你想画什么类型的图？请补充 x 轴、y 轴，以及是否需要颜色分组或筛选条件。"
+            or "What kind of chart do you want? Please specify the x-axis, y-axis, and whether you want grouping, color, or filters."
         ),
     }
 
