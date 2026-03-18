@@ -1,4 +1,4 @@
-# AI in Higher Education Chatbot
+# AI Policy Analytics Chatbot
 
 A Chainlit-based chatbot for analyzing higher education AI policy materials with module-specific RAG workflows, notebook-backed preset charts, and a default general-purpose policy corpus.
 

@@ -1,4 +1,4 @@
-# AI in Higher Education 🎓
+# AI Policy Analytics Chatbot 🎓
 
 <small>Made with ❤️ by Fan Zhang</small>
 

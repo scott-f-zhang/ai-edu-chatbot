@@ -1,4 +1,4 @@
-"""Main Chainlit entry point for the AI in Higher Education chatbot."""
+"""Main Chainlit entry point for the AI Policy Analytics Chatbot."""
 import base64
 import json
 import threading
@@ -233,7 +233,7 @@ async def on_start():
 
     await _show_module_overview(
         DEFAULT_MODULE_ID,
-        heading="## Welcome to AI in Higher Education",
+        heading="## Welcome to AI Policy Analytics Chatbot",
     )
 
 
