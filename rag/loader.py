@@ -65,16 +65,52 @@ def _load_excel(file_path: str) -> List[Document]:
 
 
 def _dataframe_to_docs(df: pd.DataFrame, source: str) -> List[Document]:
-    """Convert a DataFrame to a list of Documents (one per row)."""
+    """Convert a DataFrame to a schema summary document plus row-level documents."""
     docs = []
     columns = list(df.columns)
+    source_name = Path(source).name
+
+    schema_lines = [
+        f"Table file: {source_name}",
+        f"Table shape: {df.shape[0]} rows x {df.shape[1]} columns",
+        "Columns:",
+    ]
+    for col in columns:
+        dtype = str(df[col].dtype)
+        non_null = int(df[col].notna().sum())
+        sample = next((str(v) for v in df[col] if pd.notna(v)), "")
+        sample = sample[:120]
+        schema_lines.append(
+            f"- {col} (dtype: {dtype}, non-null: {non_null}/{len(df)}, sample: {sample})"
+        )
+
+    docs.append(
+        Document(
+            page_content="\n".join(schema_lines),
+            metadata={
+                "source": source,
+                "source_file": source_name,
+                "doc_type": "table_schema",
+                "columns": ", ".join(columns),
+            },
+        )
+    )
+
     for i, row in df.iterrows():
-        content_parts = [f"{col}: {row[col]}" for col in columns if pd.notna(row[col])]
+        content_parts = [
+            f"Table file: {source_name}",
+            f"Row index: {i}",
+        ]
+        content_parts.extend(
+            f"{col}: {row[col]}" for col in columns if pd.notna(row[col])
+        )
         content = "\n".join(content_parts)
         metadata = {
             "source": source,
+            "source_file": source_name,
             "row_index": i,
             "columns": ", ".join(columns),
+            "doc_type": "table_row",
         }
         # Add each column as metadata if value is a simple type
         for col in columns:

@@ -61,12 +61,31 @@ def _chunk_tabular_docs(
     file_type: str,
     rows_per_chunk: int,
 ) -> List[Document]:
-    """Group rows into chunks of N rows, preserving column headers in metadata."""
+    """Preserve schema docs and group row docs into chunks of N rows."""
     chunks = []
-    columns = docs[0].metadata.get("columns", "") if docs else ""
+    schema_docs = [doc for doc in docs if doc.metadata.get("doc_type") == "table_schema"]
+    row_docs = [doc for doc in docs if doc.metadata.get("doc_type") != "table_schema"]
+    columns = row_docs[0].metadata.get("columns", "") if row_docs else (docs[0].metadata.get("columns", "") if docs else "")
 
-    for chunk_idx in range(0, len(docs), rows_per_chunk):
-        batch = docs[chunk_idx: chunk_idx + rows_per_chunk]
+    for idx, doc in enumerate(schema_docs):
+        chunks.append(
+            Document(
+                page_content=doc.page_content,
+                metadata={
+                    **doc.metadata,
+                    "module_id": module_id,
+                    "source_file": source_file,
+                    "file_type": file_type,
+                    "chunk_index": idx,
+                    "row_start": -1,
+                    "row_end": -1,
+                },
+            )
+        )
+
+    base_chunk_index = len(chunks)
+    for chunk_idx in range(0, len(row_docs), rows_per_chunk):
+        batch = row_docs[chunk_idx: chunk_idx + rows_per_chunk]
         combined_content = "\n\n".join(doc.page_content for doc in batch)
         chunk = Document(
             page_content=combined_content,
@@ -74,7 +93,7 @@ def _chunk_tabular_docs(
                 "module_id": module_id,
                 "source_file": source_file,
                 "file_type": file_type,
-                "chunk_index": chunk_idx // rows_per_chunk,
+                "chunk_index": base_chunk_index + (chunk_idx // rows_per_chunk),
                 "columns": columns,
                 "row_start": chunk_idx,
                 "row_end": chunk_idx + len(batch) - 1,
